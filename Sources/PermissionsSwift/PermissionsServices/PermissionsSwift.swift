@@ -36,7 +36,6 @@ final public class PermissionManager: NSObject, PermissionService {
     let motionActivityManager = CMMotionActivityManager()
     let userNotificationsCenter = UNUserNotificationCenter.current()
     @Defaults<String>(key: .lastStepScreen) var lastStepScreen
-    @Defaults<String>(key: .firstInstall) var isFirstInstall
     private(set) var locationCompletion: EmptyBlock? = nil
     private(set) var motionPermissionShown: Bool = false
     private var locationStatus: CLAuthorizationStatus {
@@ -157,11 +156,9 @@ final public class PermissionManager: NSObject, PermissionService {
                 guard let storedPermission = lastStepScreen,
                       let indexOfPermission = PermissionScreen.allScreens.firstIndex(of: storedPermission),
                       let screen = PermissionScreen(rawValue: indexOfPermission) else {
-                    if isFirstInstall != nil {
-                        completion(PermissionScreen.complete)
-                    } else {
-                        completion(PermissionScreen.location)
-                    }
+                    
+                    let permissionsGiven = await isAllPermissionsAvailable()
+                    permissionsGiven ? completion(PermissionScreen.complete) : completion(PermissionScreen.location)
                     return
                 }
 
