@@ -5,6 +5,9 @@ public enum ScreensNamesConstants {
     static let activityMonitoring = "ActivityMonitoringScreen"
     static let backgroundOperations = "BackgroundOperationsScreen"
     static let notifications = "NotificationsScreen"
+    static let library = "LibraryScreen"
+    static let micro = "MicrophoneScreen"
+    static let camera = "CameraScreen"
     static let complete = "Complete"
 }
 
@@ -13,6 +16,9 @@ public enum PermissionScreen: Int {
     case activityMonitoring
     case backgroundOperations
     case notifications
+    case library
+    case micro
+    case camera
 
     case complete
 
@@ -26,6 +32,12 @@ public enum PermissionScreen: Int {
             self = .backgroundOperations
         case .notifications:
             self = .notifications
+        case .media:
+            self = .library
+        case .microphone:
+            self = .micro
+        case .camera:
+            self = .camera
         }
     }
 
@@ -41,6 +53,12 @@ public enum PermissionScreen: Int {
             return ScreensNamesConstants.notifications
         case .complete:
             return ScreensNamesConstants.complete
+        case .library:
+            return ScreensNamesConstants.library
+        case .micro:
+            return ScreensNamesConstants.micro
+        case .camera:
+            return ScreensNamesConstants.camera
         }
     }
 
@@ -49,6 +67,9 @@ public enum PermissionScreen: Int {
         ScreensNamesConstants.activityMonitoring,
         ScreensNamesConstants.backgroundOperations,
         ScreensNamesConstants.notifications,
+        ScreensNamesConstants.library,
+        ScreensNamesConstants.micro,
+        ScreensNamesConstants.camera,
         ScreensNamesConstants.complete
     ]}
 }

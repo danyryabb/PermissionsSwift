@@ -1,5 +1,4 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
+
 #if os(iOS)
 import CoreBluetooth
 import UserNotifications
@@ -7,18 +6,23 @@ import CoreLocation
 import CoreMotion
 import UIKit
 import os
+import AVKit
+import Photos
 
-typealias EmptyBlock = () -> Void
-typealias PermissionBlock = (PermissionType) -> Void
+public typealias EmptyBlock = () -> Void
+public typealias PermissionBlock = (PermissionType) -> Void
 
-enum PermissionType: Int, CaseIterable, RawRepresentable {
+public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case location = 0
     case motionAndFitness
     case backgroundRefresh
     case notifications
+    case media
+    case microphone
+    case camera
 }
 
-protocol PermissionService: AnyObject {
+public protocol PermissionService: AnyObject {
     func isFreshInstall(_ completion: @escaping (Bool) -> Void)
     func isAllPermissionsAvailable(_ completion: @escaping (Bool) -> Void)
     func checkPermissionAvailable(for type: PermissionType) async -> Bool
@@ -27,7 +31,7 @@ protocol PermissionService: AnyObject {
     func requestLastPermissionScreenWrapper(completion: @escaping (PermissionScreen) -> Void)
 }
 
-final class PermissionManager: NSObject, PermissionService {
+final public class PermissionManager: NSObject, PermissionService {
     let locationManager = CLLocationManager()
     let motionActivityManager = CMMotionActivityManager()
     let userNotificationsCenter = UNUserNotificationCenter.current()
@@ -46,54 +50,49 @@ final class PermissionManager: NSObject, PermissionService {
         category: String(describing: PermissionManager.self)
     )
 
-    init(
-        permissionScreens: [PermissionScreen]
+    public init(
+        permissionScreens: [PermissionScreen] = []
     ) {
         self.permissionScreens = permissionScreens
         super.init()
         self.locationManager.delegate = self
     }
     
-    func isAllPermissionsAvailable(_ completion: @escaping (Bool) -> Void) {
+    public func isAllPermissionsAvailable(_ completion: @escaping (Bool) -> Void) {
         Task {
             let allAvailable = await isAllPermissionsAvailable()
             completion(allAvailable)
         }
     }
     
-    func isAllPermissionsAvailable() async -> Bool {
-        let isLocationAvailable             = await checkLocationAndAccuracyPermission()
-        let isNotificationsAvailable        = await checkNotificationPermission()
-        let isMotionAndFitnessAvailable     = await checkMotionAndFitnessPermission()
-        let isBackgroundAppRefreshAvailable = await checkBackgroundAppRefresh()
+    public func isAllPermissionsAvailable() async -> Bool {
+        let allAvailable = await PermissionType.allCases
+            .asyncMap { type in
+                await checkPermissionAvailable(for: type)
+            }
+            .contains(false)
         
-        let allAvailable = isLocationAvailable
-                        && isNotificationsAvailable
-                        && isMotionAndFitnessAvailable
-                        && isBackgroundAppRefreshAvailable
-        
-        return allAvailable
+        return !allAvailable
     }
 
-    func isFreshInstall(_ completion: @escaping (Bool) -> Void) {
+    public func isFreshInstall(_ completion: @escaping (Bool) -> Void) {
         Task {
             let allNotDetermined = await isFreshInstall()
             completion(allNotDetermined)
         }
     }
 
-    func isFreshInstall() async -> Bool {
-        let isLocationNotDetermined         = await checkIfPermissionsAreNotDetermined(for: .location)
-        let isNotificationsNotDetermined    = await checkIfPermissionsAreNotDetermined(for: .notifications)
-        let isMotionAndFitnessNotDetermined = await checkIfPermissionsAreNotDetermined(for: .motionAndFitness)
-        let containsNotDetermined = isLocationNotDetermined
-                                    || isNotificationsNotDetermined
-                                    || isMotionAndFitnessNotDetermined
-
+    public func isFreshInstall() async -> Bool {
+        let containsNotDetermined = await PermissionType.allCases
+            .asyncMap { type in
+                await checkIfPermissionsAreNotDetermined(for: type)
+            }
+            .contains(true)
+        
         return containsNotDetermined
     }
 
-    func checkIfPermissionsAreNotDetermined(for type: PermissionType) async -> Bool {
+    public func checkIfPermissionsAreNotDetermined(for type: PermissionType) async -> Bool {
         switch type {
         case .notifications:
             let settings = await userNotificationsCenter.notificationSettings()
@@ -102,10 +101,16 @@ final class PermissionManager: NSObject, PermissionService {
             return locationManager.authorizationStatus == .notDetermined
         case .motionAndFitness:
             return CMMotionActivityManager.authorizationStatus() == .notDetermined
+        case .camera:
+            return AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+        case .media:
+            return PHPhotoLibrary.authorizationStatus() == .notDetermined
+        case .microphone:
+            return AVAudioSession.sharedInstance().recordPermission == .undetermined
         }
     }
     
-    func checkPermissionAvailable(for type: PermissionType) async -> Bool {
+    public func checkPermissionAvailable(for type: PermissionType) async -> Bool {
         switch type {
         case .notifications:
             return await checkNotificationPermission()
@@ -115,31 +120,35 @@ final class PermissionManager: NSObject, PermissionService {
             return await checkBackgroundAppRefresh()
         case .motionAndFitness:
             return await checkMotionAndFitnessPermission()
+        case .media:
+            return await checkLibraryPermission()
+        case .microphone:
+            return await checkMicroPermission()
+        case .camera:
+            return await checkCameraPermission()
         }
     }
 
-    func requestPermissionWithHandler(for type: PermissionType, completion: @escaping EmptyBlock) {
+    public func requestPermissionWithHandler(for type: PermissionType, completion: @escaping EmptyBlock) {
         switch type {
         case .notifications:
-            requestAuthorizationForNotifications {
-                completion()
-            }
+            requestAuthorizationForNotifications { completion() }
         case .location:
-            requestWhenInUseAuthorizationForLocation {
-                completion()
-            }
+            requestWhenInUseAuthorizationForLocation { completion() }
         case .backgroundRefresh:
-            requestAlwaysAuthorizationForLocation {
-                completion()
-            }
+            requestAlwaysAuthorizationForLocation { completion() }
         case .motionAndFitness:
-            requestAuthorizationForMotionActivity {
-                completion()
-            }
+            requestAuthorizationForMotionActivity { completion() }
+        case .media:
+            requestAuthorizationForLibraryUsage { completion() }
+        case .microphone:
+            requestAuthorizationForMicroUsage { completion() }
+        case .camera:
+            requestAuthorizationForCameraUsage { completion() }
         }
     }
 
-    func requestLastPermissionScreenWrapper(completion: @escaping (PermissionScreen) -> Void) {
+    public func requestLastPermissionScreenWrapper(completion: @escaping (PermissionScreen) -> Void) {
         Task {
             let allNotDetermined = await isFreshInstall()
             if allNotDetermined {
@@ -161,7 +170,7 @@ final class PermissionManager: NSObject, PermissionService {
         }
     }
 
-    func requestLastPermissionScreen() -> PermissionScreen {
+    public func requestLastPermissionScreen() -> PermissionScreen {
         guard let storedPermission = lastStepScreen,
               let indexOfPermission = PermissionScreen.allScreens.firstIndex(of: storedPermission),
               let screen = PermissionScreen(rawValue: indexOfPermission) else {
@@ -200,6 +209,21 @@ private extension PermissionManager {
         let authorizationStatus = CMMotionActivityManager.authorizationStatus()
         return authorizationStatus == .authorized
     }
+    
+    func checkCameraPermission() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        return status == .authorized
+    }
+    
+    func checkLibraryPermission() async -> Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        return status == .authorized
+    }
+    
+    func checkMicroPermission() async -> Bool {
+        let status = AVAudioSession.sharedInstance().recordPermission
+        return status == .granted
+    }
 }
 
 private extension PermissionManager {
@@ -222,12 +246,12 @@ private extension PermissionManager {
             })
         }
     }
-
+    
     func requestWhenInUseAuthorizationForLocation(completion: @escaping EmptyBlock) {
         locationCompletion = completion
         locationManager.requestWhenInUseAuthorization()
     }
-
+    
     func requestAlwaysAuthorizationForLocation(completion: @escaping EmptyBlock) {
         switch locationStatus {
         case .denied, .restricted:
@@ -238,9 +262,27 @@ private extension PermissionManager {
                 selector: #selector(didBecomeActive),
                 name: UIApplication.didBecomeActiveNotification,
                 object: nil)
-
+            
             locationCompletion = completion
             locationManager.requestAlwaysAuthorization()
+        }
+    }
+    
+    func requestAuthorizationForLibraryUsage(completion: @escaping EmptyBlock) {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            completion()
+        }
+    }
+    
+    func requestAuthorizationForCameraUsage(completion: @escaping EmptyBlock) {
+        AVCaptureDevice.requestAccess(for: AVMediaType.video) { granted in
+            completion()
+        }
+    }
+    
+    func requestAuthorizationForMicroUsage(completion: @escaping EmptyBlock) {
+        AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            completion()
         }
     }
 
@@ -263,7 +305,7 @@ private extension PermissionManager {
 }
 
 extension PermissionManager: CLLocationManagerDelegate {
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         self.locationCompletion?()
         self.locationCompletion = nil
     }
