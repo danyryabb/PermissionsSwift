@@ -72,4 +72,14 @@ public enum PermissionScreen: Int {
         ScreensNamesConstants.camera,
         ScreensNamesConstants.complete
     ]}
+    
+    static func getNextScreen(_ permission: PermissionType) -> PermissionScreen {
+        @Defaults<String>(key: .lastStepScreen) var lastStepScreen
+        guard let screen = PermissionScreen(rawValue: permission.rawValue + 1) else {
+            return .complete
+        }
+        
+        lastStepScreen = screen.localizedName
+        return screen
+    }
 }
