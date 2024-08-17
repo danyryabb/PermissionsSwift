@@ -12,6 +12,17 @@ import Photos
 public typealias EmptyBlock = () -> Void
 public typealias PermissionBlock = (PermissionType) -> Void
 
+public enum ScreensNamesConstants {
+    static let location = "LocationScreen"
+    static let motionAndFitness = "ActivityMonitoringScreen"
+    static let backgroundRefresh = "BackgroundOperationsScreen"
+    static let notifications = "NotificationsScreen"
+    static let media = "LibraryScreen"
+    static let microphone = "MicrophoneScreen"
+    static let camera = "CameraScreen"
+    static let completed = "Completed"
+}
+
 public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case location = 0
     case motionAndFitness
@@ -21,18 +32,51 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case microphone
     case camera
     
+    case completed
+    
     public func isLast(lastInSequence: PermissionType) -> Bool {
         self ==  lastInSequence
+    }
+    
+    static var allScreens: [String] { [
+        ScreensNamesConstants.location,
+        ScreensNamesConstants.motionAndFitness,
+        ScreensNamesConstants.backgroundRefresh,
+        ScreensNamesConstants.notifications,
+        ScreensNamesConstants.media,
+        ScreensNamesConstants.microphone,
+        ScreensNamesConstants.camera,
+        ScreensNamesConstants.completed
+    ]}
+    
+    public var name: String {
+        switch self {
+        case .location:
+            ScreensNamesConstants.location
+        case .motionAndFitness:
+            ScreensNamesConstants.motionAndFitness
+        case .backgroundRefresh:
+            ScreensNamesConstants.backgroundRefresh
+        case .notifications:
+            ScreensNamesConstants.notifications
+        case .media:
+            ScreensNamesConstants.media
+        case .microphone:
+            ScreensNamesConstants.microphone
+        case .camera:
+            ScreensNamesConstants.camera
+        case .completed:
+            ScreensNamesConstants.completed
+        }
     }
 }
 
 public protocol PermissionService: AnyObject {
-    func isFreshInstall(_ completion: @escaping (Bool) -> Void)
-    func isAllPermissionsAvailable(_ completion: @escaping (Bool) -> Void)
+    func isFreshInstall() async -> Bool
+    func isAllPermissionsAvailable() async -> Bool
     func checkPermissionAvailable(for type: PermissionType) async -> Bool
     func requestPermissionWithHandler(for type: PermissionType, completion: @escaping EmptyBlock)
-    func requestLastPermissionScreen() -> PermissionScreen
-    func requestLastPermissionScreenWrapper(completion: @escaping (PermissionScreen) -> Void)
+    func requestLastPermissionScreen() async -> PermissionType
 }
 
 final public class PermissionManager: NSObject, PermissionService {
@@ -45,48 +89,33 @@ final public class PermissionManager: NSObject, PermissionService {
     private var locationStatus: CLAuthorizationStatus {
         locationManager.authorizationStatus
     }
-    
-    private(set) var permissionScreens: [PermissionScreen]
-    
+
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: PermissionManager.self)
     )
 
-    public init(
-        permissionScreens: [PermissionScreen] = []
-    ) {
-        self.permissionScreens = permissionScreens
+    override public init() {
         super.init()
         self.locationManager.delegate = self
     }
     
-    public func isAllPermissionsAvailable(_ completion: @escaping (Bool) -> Void) {
-        Task {
-            let allAvailable = await isAllPermissionsAvailable()
-            completion(allAvailable)
-        }
-    }
-    
     public func isAllPermissionsAvailable() async -> Bool {
-        let allAvailable = await PermissionType.allCases
+        let notAvailable = await PermissionType
+            .allCases
+            .filter({ $0 != .completed })
             .asyncMap { type in
                 await checkPermissionAvailable(for: type)
             }
             .contains(false)
         
-        return !allAvailable
-    }
-
-    public func isFreshInstall(_ completion: @escaping (Bool) -> Void) {
-        Task {
-            let allNotDetermined = await isFreshInstall()
-            completion(allNotDetermined)
-        }
+        return !notAvailable
     }
 
     public func isFreshInstall() async -> Bool {
-        let containsNotDetermined = await PermissionType.allCases
+        let containsNotDetermined = await PermissionType
+            .allCases
+            .filter({ $0 != .completed })
             .asyncMap { type in
                 await checkIfPermissionsAreNotDetermined(for: type)
             }
@@ -110,6 +139,8 @@ final public class PermissionManager: NSObject, PermissionService {
             return PHPhotoLibrary.authorizationStatus() == .notDetermined
         case .microphone:
             return AVAudioSession.sharedInstance().recordPermission == .undetermined
+        case .completed:
+            return false
         }
     }
     
@@ -129,6 +160,8 @@ final public class PermissionManager: NSObject, PermissionService {
             return await checkMicroPermission()
         case .camera:
             return await checkCameraPermission()
+        case .completed:
+            return true
         }
     }
 
@@ -148,37 +181,25 @@ final public class PermissionManager: NSObject, PermissionService {
             requestAuthorizationForMicroUsage { completion() }
         case .camera:
             requestAuthorizationForCameraUsage { completion() }
+        case .completed:
+            completion()
         }
     }
 
-    public func requestLastPermissionScreenWrapper(completion: @escaping (PermissionScreen) -> Void) {
-        Task {
-            let allNotDetermined = await isFreshInstall()
-            if allNotDetermined {
-                completion(PermissionScreen.location)
-            } else {
-                guard let storedPermission = lastStepScreen,
-                      let indexOfPermission = PermissionScreen.allScreens.firstIndex(of: storedPermission),
-                      let screen = PermissionScreen(rawValue: indexOfPermission) else {
-                    
-                    let permissionsGiven = await isAllPermissionsAvailable()
-                    permissionsGiven ? completion(PermissionScreen.complete) : completion(PermissionScreen.location)
-                    return
-                }
-
-                completion(screen)
-            }
-        }
-    }
-
-    public func requestLastPermissionScreen() -> PermissionScreen {
-        guard let storedPermission = lastStepScreen,
-              let indexOfPermission = PermissionScreen.allScreens.firstIndex(of: storedPermission),
-              let screen = PermissionScreen(rawValue: indexOfPermission) else {
+    public func requestLastPermissionScreen() async -> PermissionType {
+        let allNotDetermined = await isFreshInstall()
+        if allNotDetermined {
             return .location
+        } else {
+            guard let storedPermission = lastStepScreen,
+                  let indexOfPermission = PermissionType.allScreens.firstIndex(of: storedPermission),
+                  let screen = PermissionType(rawValue: indexOfPermission) else {
+                let permissionsGiven = await isAllPermissionsAvailable()
+                return permissionsGiven ? .completed : .location
+            }
+            
+            return screen
         }
-
-        return screen
     }
 }
 
