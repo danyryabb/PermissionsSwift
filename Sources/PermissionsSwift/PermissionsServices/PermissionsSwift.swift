@@ -20,6 +20,10 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case media
     case microphone
     case camera
+    
+    func isLast(lastInSequence: PermissionType) -> Bool {
+        self ==  lastInSequence
+    }
 }
 
 public protocol PermissionService: AnyObject {
