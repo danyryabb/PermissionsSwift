@@ -15,7 +15,6 @@ public typealias PermissionBlock = (PermissionType) -> Void
 public enum ScreensNamesConstants {
     static let location = "LocationScreen"
     static let motionAndFitness = "ActivityMonitoringScreen"
-    static let backgroundRefresh = "BackgroundOperationsScreen"
     static let notifications = "NotificationsScreen"
     static let media = "LibraryScreen"
     static let microphone = "MicrophoneScreen"
@@ -26,7 +25,6 @@ public enum ScreensNamesConstants {
 public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case location = 0
     case motionAndFitness
-    case backgroundRefresh
     case notifications
     case media
     case microphone
@@ -36,7 +34,7 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case completed
     
     public func isLast(lastInSequence: PermissionType) -> Bool {
-        self ==  lastInSequence
+        self == lastInSequence
     }
     
     public var name: String {
@@ -45,8 +43,6 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
             ScreensNamesConstants.location
         case .motionAndFitness:
             ScreensNamesConstants.motionAndFitness
-        case .backgroundRefresh:
-            ScreensNamesConstants.backgroundRefresh
         case .notifications:
             ScreensNamesConstants.notifications
         case .media:
@@ -62,9 +58,6 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
 }
 
 public protocol PermissionService: AnyObject {
-    var isLastInSequence: Bool { get }
-
-    func getNextPermission() -> PermissionType?
     func isFreshInstall() async -> Bool
     func isAllPermissionsAvailable() async -> Bool
     func checkPermissionAvailable(for type: PermissionType) async -> Bool
@@ -89,21 +82,12 @@ final public class PermissionManager: NSObject, PermissionService {
     )
     
     private let includedPermissions: [PermissionType]
-    private var iterablePermissions: IndexingIterator<[PermissionType]>
     private var localizedPermissions: [String] {
         includedPermissions.map({ $0.name })
-    }
-    public var isLastInSequence: Bool {
-        includedPermissions.last == .completed
-    }
-    
-    public func getNextPermission() -> PermissionType? {
-        iterablePermissions.next()
     }
 
     public init(includedPermissions: [PermissionType]) {
         self.includedPermissions = includedPermissions
-        self.iterablePermissions = includedPermissions.makeIterator()
         super.init()
         self.locationManager.delegate = self
     }
@@ -135,7 +119,7 @@ final public class PermissionManager: NSObject, PermissionService {
         case .notifications:
             let settings = await userNotificationsCenter.notificationSettings()
             return settings.authorizationStatus == .notDetermined
-        case .location, .backgroundRefresh:
+        case .location:
             return locationManager.authorizationStatus == .notDetermined
         case .motionAndFitness:
             return CMMotionActivityManager.authorizationStatus() == .notDetermined
@@ -156,8 +140,6 @@ final public class PermissionManager: NSObject, PermissionService {
             return await checkNotificationPermission()
         case .location:
             return await checkLocationAndAccuracyPermission()
-        case .backgroundRefresh:
-            return await checkBackgroundAppRefresh()
         case .motionAndFitness:
             return await checkMotionAndFitnessPermission()
         case .media:
@@ -177,8 +159,6 @@ final public class PermissionManager: NSObject, PermissionService {
             requestAuthorizationForNotifications { completion() }
         case .location:
             requestWhenInUseAuthorizationForLocation { completion() }
-        case .backgroundRefresh:
-            requestAlwaysAuthorizationForLocation { completion() }
         case .motionAndFitness:
             requestAuthorizationForMotionActivity { completion() }
         case .media:
