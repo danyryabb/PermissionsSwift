@@ -86,12 +86,21 @@ final public class PermissionManager: NSObject, PermissionService {
     )
     
     private let includedPermissions: [PermissionType]
+    private var iterablePermissions: IndexingIterator<[PermissionType]>
     private var localizedPermissions: [String] {
         includedPermissions.map({ $0.name })
+    }
+    public var isLastInSequence: Bool {
+        includedPermissions.last == .completed
+    }
+    
+    public func getNextPermission() -> PermissionType? {
+        iterablePermissions.next()
     }
 
     public init(includedPermissions: [PermissionType]) {
         self.includedPermissions = includedPermissions
+        self.iterablePermissions = includedPermissions.makeIterator()
         super.init()
         self.locationManager.delegate = self
     }
