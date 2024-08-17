@@ -21,7 +21,7 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case microphone
     case camera
     
-    func isLast(lastInSequence: PermissionType) -> Bool {
+    public func isLast(lastInSequence: PermissionType) -> Bool {
         self ==  lastInSequence
     }
 }
