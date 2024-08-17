@@ -32,22 +32,12 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case microphone
     case camera
     
+    // must be included always
     case completed
     
     public func isLast(lastInSequence: PermissionType) -> Bool {
         self ==  lastInSequence
     }
-    
-    static var allScreens: [String] { [
-        ScreensNamesConstants.location,
-        ScreensNamesConstants.motionAndFitness,
-        ScreensNamesConstants.backgroundRefresh,
-        ScreensNamesConstants.notifications,
-        ScreensNamesConstants.media,
-        ScreensNamesConstants.microphone,
-        ScreensNamesConstants.camera,
-        ScreensNamesConstants.completed
-    ]}
     
     public var name: String {
         switch self {
@@ -94,15 +84,20 @@ final public class PermissionManager: NSObject, PermissionService {
         subsystem: Bundle.main.bundleIdentifier!,
         category: String(describing: PermissionManager.self)
     )
+    
+    private let includedPermissions: [PermissionType]
+    private var localizedPermissions: [String] {
+        includedPermissions.map({ $0.name })
+    }
 
-    override public init() {
+    public init(includedPermissions: [PermissionType]) {
+        self.includedPermissions = includedPermissions
         super.init()
         self.locationManager.delegate = self
     }
     
     public func isAllPermissionsAvailable() async -> Bool {
-        let notAvailable = await PermissionType
-            .allCases
+        let notAvailable = await includedPermissions
             .filter({ $0 != .completed })
             .asyncMap { type in
                 await checkPermissionAvailable(for: type)
@@ -113,8 +108,7 @@ final public class PermissionManager: NSObject, PermissionService {
     }
 
     public func isFreshInstall() async -> Bool {
-        let containsNotDetermined = await PermissionType
-            .allCases
+        let containsNotDetermined = await includedPermissions
             .filter({ $0 != .completed })
             .asyncMap { type in
                 await checkIfPermissionsAreNotDetermined(for: type)
@@ -188,7 +182,7 @@ final public class PermissionManager: NSObject, PermissionService {
 
     public func requestLastPermissionScreen() async -> PermissionType {
         guard let storedPermission = lastStepScreen,
-              let indexOfPermission = PermissionType.allScreens.firstIndex(of: storedPermission),
+              let indexOfPermission = localizedPermissions.firstIndex(of: storedPermission),
               let screen = PermissionType(rawValue: indexOfPermission) else {
             let permissionsGiven = await isAllPermissionsAvailable()
             return permissionsGiven ? .completed : .location
