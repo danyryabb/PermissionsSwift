@@ -187,19 +187,14 @@ final public class PermissionManager: NSObject, PermissionService {
     }
 
     public func requestLastPermissionScreen() async -> PermissionType {
-        let allNotDetermined = await isFreshInstall()
-        if allNotDetermined {
-            return .location
-        } else {
-            guard let storedPermission = lastStepScreen,
-                  let indexOfPermission = PermissionType.allScreens.firstIndex(of: storedPermission),
-                  let screen = PermissionType(rawValue: indexOfPermission) else {
-                let permissionsGiven = await isAllPermissionsAvailable()
-                return permissionsGiven ? .completed : .location
-            }
-            
-            return screen
+        guard let storedPermission = lastStepScreen,
+              let indexOfPermission = PermissionType.allScreens.firstIndex(of: storedPermission),
+              let screen = PermissionType(rawValue: indexOfPermission) else {
+            let permissionsGiven = await isAllPermissionsAvailable()
+            return permissionsGiven ? .completed : .location
         }
+        
+        return screen
     }
 }
 
