@@ -62,6 +62,9 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
 }
 
 public protocol PermissionService: AnyObject {
+    var isLastInSequence: Bool { get }
+
+    func getNextPermission() -> PermissionType?
     func isFreshInstall() async -> Bool
     func isAllPermissionsAvailable() async -> Bool
     func checkPermissionAvailable(for type: PermissionType) async -> Bool
