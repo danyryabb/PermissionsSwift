@@ -194,7 +194,7 @@ final public class PermissionManager: NSObject, PermissionService {
             return permissionsGiven ? .completed : .location
         }
         
-        return screen
+        return screen == .completed ? screen : screen.next()
     }
 }
 
