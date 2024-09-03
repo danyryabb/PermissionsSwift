@@ -196,11 +196,7 @@ private extension PermissionManager {
     }
 
     func checkLocationAndAccuracyPermission() async -> Bool {
-        if #available(iOS 14.0, *) {
-            return self.locationStatus == .authorizedAlways && locationManager.accuracyAuthorization == .fullAccuracy
-        } else {
-            return self.locationStatus == .authorizedAlways
-        }
+        return (self.locationStatus == .authorizedWhenInUse || self.locationStatus == .authorizedAlways) && locationManager.accuracyAuthorization == .fullAccuracy
     }
     
     func checkBackgroundAppRefresh() async -> Bool {
