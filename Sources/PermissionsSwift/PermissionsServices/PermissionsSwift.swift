@@ -58,6 +58,8 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
 }
 
 public protocol PermissionService: AnyObject {
+    var locationManager: CLLocationManager { get }
+
     func isFreshInstall() async -> Bool
     func isAllPermissionsAvailable() async -> Bool
     func checkPermissionAvailable(for type: PermissionType) async -> Bool
@@ -66,7 +68,7 @@ public protocol PermissionService: AnyObject {
 }
 
 final public class PermissionManager: NSObject, PermissionService {
-    let locationManager = CLLocationManager()
+    public var locationManager = CLLocationManager()
     let motionActivityManager = CMMotionActivityManager()
     let userNotificationsCenter = UNUserNotificationCenter.current()
     @Defaults<String>(key: .lastStepScreen) var lastStepScreen
