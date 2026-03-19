@@ -14,22 +14,17 @@ public typealias PermissionBlock = (PermissionType) -> Void
 
 public enum ScreensNamesConstants {
     static let location = "LocationScreen"
-    static let motionAndFitness = "ActivityMonitoringScreen"
     static let notifications = "NotificationsScreen"
     static let media = "LibraryScreen"
-    static let microphone = "MicrophoneScreen"
     static let camera = "CameraScreen"
     static let completed = "Completed"
 }
 
 public enum PermissionType: Int, CaseIterable, RawRepresentable {
     case location = 0
-    case motionAndFitness
     case notifications
     case media
-    case microphone
     case camera
-    
     // must be included always
     case completed
     
@@ -41,14 +36,10 @@ public enum PermissionType: Int, CaseIterable, RawRepresentable {
         switch self {
         case .location:
             ScreensNamesConstants.location
-        case .motionAndFitness:
-            ScreensNamesConstants.motionAndFitness
         case .notifications:
             ScreensNamesConstants.notifications
         case .media:
             ScreensNamesConstants.media
-        case .microphone:
-            ScreensNamesConstants.microphone
         case .camera:
             ScreensNamesConstants.camera
         case .completed:
@@ -69,7 +60,6 @@ public protocol PermissionService: AnyObject {
 
 final public class PermissionManager: NSObject, PermissionService {
     public var locationManager = CLLocationManager()
-    let motionActivityManager = CMMotionActivityManager()
     let userNotificationsCenter = UNUserNotificationCenter.current()
     @Defaults<String>(key: .lastStepScreen) var lastStepScreen
     private(set) var locationCompletion: EmptyBlock? = nil
@@ -123,14 +113,10 @@ final public class PermissionManager: NSObject, PermissionService {
             return settings.authorizationStatus == .notDetermined
         case .location:
             return locationManager.authorizationStatus == .notDetermined
-        case .motionAndFitness:
-            return CMMotionActivityManager.authorizationStatus() == .notDetermined
         case .camera:
             return AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
         case .media:
             return PHPhotoLibrary.authorizationStatus() == .notDetermined
-        case .microphone:
-            return AVAudioSession.sharedInstance().recordPermission == .undetermined
         case .completed:
             return false
         }
@@ -142,12 +128,8 @@ final public class PermissionManager: NSObject, PermissionService {
             return await checkNotificationPermission()
         case .location:
             return await checkLocationAndAccuracyPermission()
-        case .motionAndFitness:
-            return await checkMotionAndFitnessPermission()
         case .media:
             return await checkLibraryPermission()
-        case .microphone:
-            return await checkMicroPermission()
         case .camera:
             return await checkCameraPermission()
         case .completed:
@@ -161,12 +143,8 @@ final public class PermissionManager: NSObject, PermissionService {
             requestAuthorizationForNotifications { completion() }
         case .location:
             requestWhenInUseAuthorizationForLocation { completion() }
-        case .motionAndFitness:
-            requestAuthorizationForMotionActivity { completion() }
         case .media:
             requestAuthorizationForLibraryUsage { completion() }
-        case .microphone:
-            requestAuthorizationForMicroUsage { completion() }
         case .camera:
             requestAuthorizationForCameraUsage { completion() }
         case .completed:
@@ -205,11 +183,6 @@ private extension PermissionManager {
         let status = await UIApplication.shared.backgroundRefreshStatus
         return status == .available
     }
-
-    func checkMotionAndFitnessPermission() async -> Bool {
-        let authorizationStatus = CMMotionActivityManager.authorizationStatus()
-        return authorizationStatus == .authorized
-    }
     
     func checkCameraPermission() async -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -219,11 +192,6 @@ private extension PermissionManager {
     func checkLibraryPermission() async -> Bool {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         return status == .authorized
-    }
-    
-    func checkMicroPermission() async -> Bool {
-        let status = AVAudioSession.sharedInstance().recordPermission
-        return status == .granted
     }
 }
 
@@ -279,29 +247,6 @@ private extension PermissionManager {
         AVCaptureDevice.requestAccess(for: AVMediaType.video) { granted in
             completion()
         }
-    }
-    
-    func requestAuthorizationForMicroUsage(completion: @escaping EmptyBlock) {
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            completion()
-        }
-    }
-
-    func requestAuthorizationForMotionActivity(completion: @escaping EmptyBlock) {
-        motionActivityManager.startActivityUpdates(to: .main) { [weak self] activity in
-            if self?.motionPermissionShown == false {
-                self?.motionPermissionShown = true
-                completion()
-            }
-        }
-
-        motionActivityManager.queryActivityStarting(from: Date(), to: Date(), to: .main, withHandler: { [weak self] activities, error in
-            if let error, self?.motionPermissionShown == false {
-                self?.motionPermissionShown = true
-                self?.logger.debug("CMError - \(error.localizedDescription)")
-                completion()
-            }
-        })
     }
 }
 
